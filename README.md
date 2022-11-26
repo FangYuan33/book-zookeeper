@@ -85,7 +85,7 @@ zookeeper节点包含的选举状态
 - **OBSERVING**: 对应Observer角色，知道Leader是谁
 - **LEADING**: 对应Leader角色
 
-### 2.1 原理
+### 2.1 选举流程原理
 #### 2.1.1 选举结果依据比较流程图
 ![img_4.png](img_4.png)
 
@@ -128,6 +128,21 @@ zookeeper节点包含的选举状态
 比较规则判断流程图
 
 ![](选举流程图2.jpg)
+
+### 2.2 选举网络通信原理
+zookeeper投票机制是异步的，它会将投票信息放入**队列**，**开启线程异步消费消息进行发送**，网络连接和消息通信借助`Socket + IO流`实现。
+
+流程图如下，右侧 `QuorumCnxManager` 是网络通信 **"组件"**，负责将投票信息在节点间发送和接收，注意各个节点只和比自己myid小的建立连接，避免连接重复；
+左侧 `FastLeaderElection` 则负责将投票信息提供给网络通信组件
+
+![](选举网络通信原理.jpg)
+
+1. zookeeper启动时，会开启两条线程其中 `WorkerSender` 负责将要发送的消息从 `senderqueue` 中拿出来，放到 `queueSendMap` 中，
+其中 key为接收者myid(要让Socket知道发给谁), value为要发送的投票信息； 
+`WorkerReceiver` 负责将 `QuorumCnxManager` 中接收到的消息从 `recvQueue` 队列里拿出来放入`recvqueue`
+2. `QuorumCnxManager` 也开启两条线程（注意这里是每个连接开启两条线程），`SenderWorker` 负责发，`RecvWorker` 负责接收消息
+3. 选举开始时，每个节点都为自己投一票，并放入 `senderqueue` 中， `WorkerSender` 和 `SenderWorker` 则不断的轮询处理要发送的消息，
+同样 `RecvWorker` 和 `WorkerReceiver` 也是不断地轮询接收投票信息
 
 ---
 
