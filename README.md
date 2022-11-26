@@ -44,12 +44,6 @@ znode，像Linux的文件系统一样，每个节点都是用一个**路径作�
 
 如上图，`/，/app1，/app2`属于三个根节点，`/app1/p_1`属于`/app1`节点的子节点
 
-### 1.5 什么是Session
-![img_3.png](img_3.png)
-
-客户端与zookeeper服务端**通过session**建立连接，每个与服务器建立链接的客户端都会被分配一个sessionID，且全局唯一。
-而且session也能设置超时时间，如果在规定时间内客户端没能与服务器进行心跳或者通信，则链接失效。
-
 ## 2. Leader选举
 - 我们在搭建集群的时候，都会添加如下配置，其中server`.1 .2 .3`这个编号，在选举中会用到，暂且称它为`myid`
 >server.1= ZooKeeper 1:2888:3888 </p>
@@ -143,6 +137,20 @@ zookeeper投票机制是异步的，它会将投票信息放入**队列**，**�
 2. `QuorumCnxManager` 也开启两条线程（注意这里是每个连接开启两条线程），`SenderWorker` 负责发，`RecvWorker` 负责接收消息
 3. 选举开始时，每个节点都为自己投一票，并放入 `senderqueue` 中， `WorkerSender` 和 `SenderWorker` 则不断的轮询处理要发送的消息，
 同样 `RecvWorker` 和 `WorkerReceiver` 也是不断地轮询接收投票信息
+
+## 3. Session
+![img_3.png](img_3.png)
+
+客户端与zookeeper服务端**通过session**建立连接，**用于客户端和服务端之间的通信**。每个与服务器建立链接的客户端都会被分配一个 `sessionID` ，
+且全局唯一。 
+
+Session能设置超时时间，如下代码所示，超时时间为 3000ms
+```java
+ZooKeeper client = new ZooKeeper("127.0.0.1:2181", 3000, null);
+```
+但是超时时间最好设置为服务器参数 `tickTime` 的整数倍，因为zookeeper的超时检测机制是每`tickTime`时长检测一次，如果 `tickTime` 为4000ms，
+那么客户端超时时间会是4000ms，因为在3000ms即将过期时，zookeeper没有触发超时检测机制，不能使该链接过期。 如果在规定时间内
+客户端能与服务器进行**心跳**或者**通信(CRUD操作)**，则Session过期时间被刷新，完成"续期"动作。
 
 ---
 
