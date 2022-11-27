@@ -195,7 +195,20 @@ public static long initializeNextSessionId(long id) {
 发 commit 请求就代表这个数据**可以对外提供**了，该数据在集群内同步情况没问题，此时Leader自己会把数据写到内存中（这时候 Leader 就能提供这份数据给客户端了）
 5. Follower 收到 commit 请求后会将数据写到各自节点的内存中，同时Leader会将请求发给 Observer集群，通知 Observer集群 将数据写到内存
 
-因为Leader收到过半Follower的ack消息即认为写入成功，所以zookeeper没有保证强一致性，只是保证了顺序一致性
+采用2PC（两阶段提交）的机制，Leader收到过半Follower的ack消息即认为写入成功，所以**zookeeper没有保证强一致性**，**只是保证了顺序一致性**
+
+### 4.2 顺序一致性的理解
+
+它的实现原理类似2PC（两阶段提交）的机制，采用的是责任链设计模式。假设zookeeper集群中有3个节点，那么一个事务请求进来后首先Leader节点会发 `proposal` 请求给各个 Follower，
+只要 Leader 节点收到 Follower 集群返回的 ack 数量（包括Leader节点自身的ack）**过半**后，在这个集群中只要有一个ack由Follower节点返回即过半，
+那么 Leader 就会发起 commit 请求到 Follower，通知它们将数据写到内存中， 此时这条数据就能够提供对外访问了，这样它就**没有保证强一致性**。
+
+而zookeeper实现**顺序一致性的原理**是 Leader 会为每个请求生成zxid（事务ID），发送 `proposal` 请求给 Follower，
+Follower 会将请求写入到两个先入先出（FIFO）的阻塞队列中，然后发送 ack 给 Leader；当ack过半时，Leader 发送 commit 请求给 Follower，
+Follower 会对比zxid和阻塞队列中的zxid，如果不一致的话，需要跟 Leader 重新同步数据，以此来保证严格有序。
+
+zookeeper如何保证强一致性？ zookeeper内有一个 `sync()` 方法，Follower在查询前主动调用这个方法将数据从Leader节点同步过来，
+这样再查询就能和Leader节点数据一致来保证强一致性了。
 
 ---
 
