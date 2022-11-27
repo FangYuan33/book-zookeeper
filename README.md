@@ -183,6 +183,20 @@ public static long initializeNextSessionId(long id) {
 - 这个算法最大支持的qps是多少？
 **低 16 位都是 0 可用于并发自增**，结合中间40位的当前毫秒数，也就是每毫秒有`1111 1111 1111 1111`次，即65535，那么qps最大为65535000次
 
+## 4. 一次CRUD请求
+### 4.1 一次Create请求流程
+![](CRUD流程图.jpg)
+
+一次客户端发送Create请求如上图所示
+1. 客户端发 `create` 请求到 Leader，即使请求没落到 Leader 上，那么其他节点也会将写请求转发到 Leader
+2. Leader 会先发一个 proposal（提议）请求给各个 Follower，且自己将数据写到本地文件
+3. Follower 集群收到 proposal 请求后会将数据写到本地文件，写成功后返回给 Leader 一个 ack
+4. Leader 发现收到 ack 数大于整个集群的一半了（包含当前 Leader 节点），则重新提交一个 commit 请求给各个 Follower 节点，
+发 commit 请求就代表这个数据**可以对外提供**了，该数据在集群内同步情况没问题，此时Leader自己会把数据写到内存中（这时候 Leader 就能提供这份数据给客户端了）
+5. Follower 收到 commit 请求后会将数据写到各自节点的内存中，同时Leader会将请求发给 Observer集群，通知 Observer集群 将数据写到内存
+
+因为Leader收到过半Follower的ack消息即认为写入成功，所以zookeeper没有保证强一致性，只是保证了顺序一致性
+
 ---
 
 ## 服务端核心参数
