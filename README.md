@@ -274,6 +274,11 @@ dataLength 	           = 0 节点数据长度
 3. **TRUNC**: 回滚同步，非Leader 节点的事务ID大于 Leader节点，需要 非Leader节点 将数据回滚到 Leader节点 的最大事务ID即可
 4. **TRUNC + DIFF**: 先回滚再差异化同步
 
+## 6. Watcher机制
+`Watcher` 机制实现的核心组件是 `WatcherManager`，由它来进行管理，使用的是**观察者模式**。它维护了两个 Map ，其中一个 Map 以节点的 path 为 key，
+以 Watcher 列表为 value，主要用于某个节点发生变更后通知监听到此 path 的各个 Watcher；
+另一个 Map 以 Watcher 为 key，以 path 列表为 value，主要用于某个 Watcher 断开连接后要删除其监听的所有 path
+
 ---
 
 ## 服务端核心参数
