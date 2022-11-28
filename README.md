@@ -275,9 +275,11 @@ dataLength 	           = 0 节点数据长度
 4. **TRUNC + DIFF**: 先回滚再差异化同步
 
 ## 6. Watcher机制
-`Watcher` 机制实现的核心组件是 `WatcherManager`，由它来进行管理，使用的是**观察者模式**。它维护了两个 Map ，其中一个 Map 以节点的 path 为 key，
-以 Watcher 列表为 value，主要用于某个节点发生变更后通知监听到此 path 的各个 Watcher；
+`Watcher` 机制（**节点变更的监听回调**）实现的核心组件是 `WatcherManager`，由它来进行管理，使用的是**观察者模式**。它维护了两个 Map ，
+其中一个 Map 以节点的 path 为 key， 以 Watcher 列表为 value，主要用于某个节点发生变更后通知监听到此 path 的各个 Watcher；
 另一个 Map 以 Watcher 为 key，以 path 列表为 value，主要用于某个 Watcher 断开连接后要删除其监听的所有 path
+
+`Watcher` 的注册时机是客户端在调用 `getData()` 方法的时候
 
 ---
 
