@@ -25,7 +25,7 @@ zookeeper采用的是CAP理论的**CP模型**，**用服务的可用性来换取
 - **Follower**: 从节点，仅提供**读能力**，且**能参加选举**
 - **Observer**: 也是从节点，仅**提供读能力**，但是**不能参加选举**。它只会接收Leader的同步数据，合理利用它能够提高集群的**读并发能力**
 
-![img.png](img.png)
+![img.png](images/img.png)
 
 ### 1.3 zookeeper的节点类型
 znode，可以理解为zookeeper内**存储数据的数据结构**，有持久节点和临时节点两种类型
@@ -41,7 +41,7 @@ znode，可以理解为zookeeper内**存储数据的数据结构**，有持久�
 ### 1.4 什么是节点
 znode，像Linux的文件系统一样，每个节点都是用一个**路径作为唯一标识**，**每个节点都能保存数据**，**也可以多层级**。
 
-![img_1.png](img_1.png)
+![img_1.png](images/img_1.png)
 
 如上图，`/，/app1，/app2`属于三个根节点，`/app1/p_1`属于`/app1`节点的子节点
 
@@ -82,7 +82,7 @@ zookeeper节点包含的选举状态
 
 ### 2.1 选举流程原理
 #### 2.1.1 选举结果依据比较流程图
-![img_4.png](img_4.png)
+![img_4.png](images/img_4.png)
 
 选举结果比较依据如上图所示，会先比较 `zxid` 的 `epoch`，有大选大，相同的话继续比较事务次数，有大选大，如果还相同的话，那么只能选 `myid` 比较大的节点了
 
@@ -115,14 +115,14 @@ zookeeper节点包含的选举状态
 
 结果如图所示
 
-![](选举流程图3.jpg)
+![](images/选举流程图3.jpg)
 
 最终选举结果，如果票数**超过服务器的半数**，那么则选举该节点为Leader节点。
 三个节点会结束LOOKING状态，服务器3进入LEADING状态，服务器1和服务器2进入FOLLOWING状态
 
 比较规则判断流程图
 
-![](选举流程图2.jpg)
+![](images/选举流程图2.jpg)
 
 ### 2.2 选举网络通信原理
 zookeeper投票机制是异步的，它会将投票信息放入**队列**，**开启线程异步消费消息进行发送**，网络连接和消息通信借助`Socket + IO流`实现。
@@ -130,7 +130,7 @@ zookeeper投票机制是异步的，它会将投票信息放入**队列**，**�
 流程图如下，右侧 `QuorumCnxManager` 是网络通信 **"组件"**，负责将投票信息在节点间发送和接收，注意各个节点只和比自己myid小的建立连接，避免连接重复；
 左侧 `FastLeaderElection` 则负责将投票信息提供给网络通信组件
 
-![](选举网络通信原理.jpg)
+![](images/选举网络通信原理.jpg)
 
 1. zookeeper启动时，会开启两条线程其中 `WorkerSender` 负责将要发送的消息从 `senderqueue` 中拿出来，放到 `queueSendMap` 中，
 其中 key为接收者myid(要让Socket知道发给谁), value为要发送的投票信息； 
@@ -140,7 +140,7 @@ zookeeper投票机制是异步的，它会将投票信息放入**队列**，**�
 同样 `RecvWorker` 和 `WorkerReceiver` 也是不断地轮询接收投票信息
 
 ## 3. Session
-![img_3.png](img_3.png)
+![img_3.png](images/img_3.png)
 
 客户端与zookeeper服务端**通过session**建立连接，**用于客户端和服务端之间的通信**。每个与服务器建立链接的客户端都会被分配一个 `sessionID` ，
 且全局唯一。 
@@ -186,7 +186,7 @@ public static long initializeNextSessionId(long id) {
 
 ## 4. 一次CRUD请求
 ### 4.1 一次Create请求流程
-![](CRUD流程图.jpg)
+![](images/CRUD流程图.jpg)
 
 一次客户端发送Create请求如上图所示
 1. 客户端发 `create` 请求到 Leader，即使请求没落到 Leader 上，那么其他节点也会将写请求转发到 Leader
@@ -198,7 +198,19 @@ public static long initializeNextSessionId(long id) {
 
 采用2PC（两阶段提交）的机制，Leader收到过半Follower的ack消息即认为写入成功，所以**zookeeper没有保证强一致性**，**只是保证了顺序一致性**
 
-### 4.2 顺序一致性的理解
+### 4.2 责任链模式
+代码中使用了责任链模式，会封装如下图所示的责任链
+![img.png](images/zookeeper.png)
+
+- **LeaderRequestProcessor**: 校验工作
+- **PrepRequestProcessor**: 请求入队
+- **ProposalRequestProcessor**: 两阶段提交的proposal阶段
+- **SyncRequestProcessor**: 将数据写入本地事务文件
+- **CommitProcessor**: 等到过半ack后，处理接下来的节点任务
+- **ToBeAppliedRequestProcessor**: do noting
+- **FinalRequestProcessor**: 将数据写到内存 Map 中
+
+### 4.3 顺序一致性的理解
 
 它的实现原理采用2PC（两阶段提交）的机制，并且使用了**责任链设计模式**。假设zookeeper集群中有3个节点，那么一个事务请求进来后首先Leader节点会发 `proposal` 请求给各个 Follower，
 只要 Leader 节点收到 Follower 集群返回的 ack 数量（包括Leader节点自身的ack）**过半**后，在这个集群中只要有一个ack由Follower节点返回即过半，
@@ -209,17 +221,17 @@ Follower 会将请求写入到先入先出（FIFO）的阻塞队列(pendingTxns)
 当ack过半时，Leader 发送 commit 请求给 Follower，Follower 会对比zxid和阻塞队列中的zxid，如果不一致的话，会让Follower强制退出（System.exit.），
 之后需要跟 Leader 重新同步数据，以此来保证严格有序。
 
-zookeeper如何保证强一致性？ 通过`sync()` 方法。Follower在查询前主动调用这个方法先将数据从Leader节点同步过来，
+zookeeper如何保证强一致性？ 通过`sync()` 方法。客户端在查询前主动调用这个方法，请求到Follower时，会先将数据从Leader节点同步过来，
 这样再查询就能和Leader节点数据一致来保证强一致性了。
 
-### 4.3 不同客户端能保证顺序性吗？
+### 4.4 不同客户端能保证顺序性吗？
 
 假设A先发送事务请求，在请求返回之前，B也发送了请求查询该节点，那B会阻塞到A执行完再查询码？还是直接返回查询不到节点呢？
 
 B会直接返回查询不到数据，因为zookeeper是通过一个HashMap去**分别放置不同客户端的请求**的，不同客户端的SessionId不同，
 而这个HashMap的value恰恰又是上文提到的先入先出的阻塞队列，所以，同一个客户端的请求能被顺序执行，但是不同客户端是不可以的
 
-### 4.4 读请求是如何被处理的？
+### 4.5 读请求是如何被处理的？
 
 读请求的本质都是从 `DataTree` 这个数据结构中获取数据，它在其中维护了 `nodes` 这个HashMap，根据查询请求的 `path`，
 调用`get(path)`方法，返回它其中的value值
@@ -354,7 +366,7 @@ get /helloworld/v1
 ```
 - 执行完以上命令，节点如下图所示
 
-![img_2.png](img_2.png)
+![img_2.png](images/img_2.png)
 
 ```shell
 # 创建临时节点
