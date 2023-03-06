@@ -307,11 +307,20 @@ dataLength 	           = 0 节点数据长度
 
 `Watcher` 的注册时机是客户端在调用 `getData()` 方法的时候
 
-## 7. zookeeper 用到的设计模式
+## 7. zookeeper 脑裂问题
+
+简单来说，一个集群中出现多个 Leader 节点被称为**脑裂现象**。造成脑裂的原因可能是集群中**网络通信不好**，导致 Follower 节点认为 Leader 节点心跳超时，
+但实际上 Leader 节点并未真的出现宕机，出现 Leader 节点的**假死**现象。 Leader 节点假死后，剩下的 Follower 节点会进行新的选举，使某个 Follower
+节点成为新的 Leader，此时集群中便存在两个 Leader 节点，也就是脑裂现象。这会使得部分 Client 连接到老的 Leader，部分 Client 连接到新的 Leader，产生混乱。
+
+**zookeeper的解决方案**: 当旧的 Leader "复活" 并向其他 Follower 发送写请求时，会被拒绝。因为 zookeeper 维护了 epoch 变量，当新的 Leader 产生时，
+epoch 会递增，Follower 如果确认了新的 Leader，epoch 递增，它们会拒绝 epoch 小于现任 Leader 的所有写请求。
+
+## 8. zookeeper 用到的设计模式
 
 责任链模式、观察者模式、工厂模式、单例模式
 
-## 8. 队列异步缓冲的思想
+## 9. 队列异步缓冲的思想
 这种代码设计用于**提高性能**和**解耦**，模拟的是**MQ生产者和消费者的思想**，具体实现借助**内存队列**。
 
 比如，我们现在需要是对业务的增删改操作记录一条Log到数据库，因为入库操作比较耗时，所以可以考虑添加内存队列作为缓冲：将log**写入队列代替直接写库**，
