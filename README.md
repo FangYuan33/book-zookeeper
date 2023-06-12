@@ -226,7 +226,10 @@ public static long initializeNextSessionId(long id) {
 发 commit 请求就代表这个数据 **可以对外提供** 了，该数据在集群内同步情况没问题，此时Leader自己会把数据写到内存中（这时候 Leader 就能提供这份数据给客户端了）
 5. Follower 收到 commit 请求后会将数据写到各自节点的内存中，同时Leader会将请求发给 Observer集群，通知 Observer集群 将数据写到内存
 
-采用2PC（两阶段提交）的机制，Leader收到过半Follower的ack消息即认为写入成功，所以**zookeeper没有保证强一致性**，**只是保证了顺序一致性**
+采用 **容错共识算法** 机制，Leader收到过半Follower的ack消息即认为写入成功，所以**zookeeper没有保证强一致性**，**只是保证了顺序一致性**。
+
+> 容错共识算法通常如下形式：一个或多个节点 **提议（propose）** 某些值，而共识算法 **决定（decides）** 采用其中的某个值，决定的通过 **遵循基于法定人数** 的表决。
+> 它与2PC（两阶段提交）不同的是：两阶段提交要求 **所有的参与者** 都表决成功才能够通过，而容错共识算法基于法定人数。
 
 ### 4.2 责任链模式
 
@@ -236,7 +239,7 @@ public static long initializeNextSessionId(long id) {
 
 - **LeaderRequestProcessor**: 校验工作
 - **PrepRequestProcessor**: 请求入队
-- **ProposalRequestProcessor**: 两阶段提交的proposal阶段
+- **ProposalRequestProcessor**: 提交proposal提议阶段
 - **SyncRequestProcessor**: 将数据写入本地事务文件
 - **CommitProcessor**: 等到过半ack后，处理接下来的节点任务
 - **ToBeAppliedRequestProcessor**: do noting
@@ -244,7 +247,7 @@ public static long initializeNextSessionId(long id) {
 
 ### 4.3 顺序一致性的理解
 
-它的实现原理采用2PC（两阶段提交）的机制，并且使用了**责任链设计模式**。假设zookeeper集群中有3个节点，
+它的实现原理采用 **容错共识算法** 的机制，并且使用了**责任链设计模式**。假设zookeeper集群中有3个节点，
 那么一个事务请求进来后首先Leader节点会发 `proposal提议` 请求给各个 Follower，
 只要 Leader 节点收到 Follower 集群返回的 ack 数量（包括Leader节点自身的ack）**过半**，在当前集群中只要有一个 ack 由 Follower 节点返回即过半，
 那么 Leader 就会发起 commit 请求到 Follower，通知它们将数据写到内存中， 此时这条数据就能够提供对外访问了，这样它就**没有保证强一致性**。
