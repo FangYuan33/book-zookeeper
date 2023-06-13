@@ -219,12 +219,16 @@ public static long initializeNextSessionId(long id) {
 ![](images/CRUD流程图.jpg)
 
 一次客户端发送Create请求如上图所示
+
 1. 客户端发 `create` 请求到 Leader，即使请求没落到 Leader 上，那么其他节点也会将写请求转发到 Leader
+
 2. Leader 会先发一个 提议（proposal）请求给各个 Follower，且自己将数据写到本地文件
-3. Follower 集群收到 proposal 请求后会将数据写到本地文件，写成功后返回给 Leader 一个 ack
-4. Leader 发现收到 ack 数大于整个集群的一半了（包含当前 Leader 节点），则重新提交一个 commit 请求给各个 Follower 节点，
-发 commit 请求就代表这个数据 **可以对外提供** 了，该数据在集群内同步情况没问题，此时Leader自己会把数据写到内存中（这时候 Leader 就能提供这份数据给客户端了）
-5. Follower 收到 commit 请求后会将数据写到各自节点的内存中，同时Leader会将请求发给 Observer集群，通知 Observer集群 将数据写到内存
+
+3. Follower 集群收到 proposal 请求后会将数据写到本地文件，写成功后返回给 Leader 一个 ack回复
+
+4. Leader 发现收到 ack 回复的数量为 **法定人数**（过半，包含当前 Leader 节点）时，则提交一个 commit 请求给各个 Follower 节点。发送 commit 请求就代表该数据在集群内同步情况没有问题，并且 **可以对外提供访问** 了，此时Leader会把数据写到内存中
+
+5. Follower 收到 commit 请求后也会将数据写到各自节点的内存中，同时Leader会将数据发给 Observer集群，通知 Observer集群 将数据写到内存
 
 采用 **容错共识算法** 机制，Leader收到过半Follower的ack消息即认为写入成功，所以**zookeeper没有保证强一致性**，**只是保证了顺序一致性**。
 
